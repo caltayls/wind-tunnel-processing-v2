@@ -14,7 +14,7 @@ def find_files(pattern):
     """Use regex to locate desired files
     Returns list of file paths.
     """
-    cine_files = glob.glob(r"D:\Raw_DPSP-Data/*/*.cine")
+    cine_files = glob.glob(r"F:\Raw_DPSP-Data/*/*.cine")
     pattern = re.compile(pattern)
     matches = [file for file in cine_files if pattern.search(file) is not None]
     
@@ -101,7 +101,7 @@ def img_dict(file_path):
         'display_image': display_img,
     }
 
-class SetUpLabelledDataset:
+class LabelledDataset:
     
     # add circle gen that allows user to change hough circle params
     def _find_circles(self, file_path=None, param1 = 25, param2 = 15):
@@ -135,10 +135,8 @@ class SetUpLabelledDataset:
 
  
 
-
-    def create_labelled_dataset(self, file_paths: dict, labelled_datset_file_path):
+    def create_labelled_dataset(self, file_paths: dict, labelled_datset_file_path: str):
         # Data that will be used to automate labelling
-        # HoughCricle params tried and tested
         
         labelled_configs_array = []
         for config, path in file_paths.items():
@@ -300,18 +298,19 @@ class PressureTapLabeller:
         # Add highest scoring ptap name and score to score df and then join with circle df
         # This labels each circle record with the most likely pressure tap and drops any circles that scored lower than threshold.
         highest_scoring_ptap = score_df.apply(lambda row: row.idxmax(), axis=1)
+        print(highest_scoring_ptap)
         highest_score = score_df.apply(lambda row: row.values.max(), axis=1)
         score_df['highest_scoring_ptap'] = highest_scoring_ptap
         score_df['highest_score'] = highest_score
         print(score_df)
         print('================')
-        print(circle_pos_and_dist)
+        # print(circle_pos_and_dist)
         predicted_ptap_and_score = score_df[['highest_scoring_ptap', 'highest_score']]
      
         match_df = predicted_ptap_and_score.join(circle_pos_and_dist)[score_df.highest_score>70] # remove any circles with a score less than 70
         match_df['config'] = file
         match_df['config'] = match_df.config.str.strip(r'D:\Raw_DPSP-Data\\')
-        print(match_df)
+    
         
         return match_df
 
@@ -343,7 +342,7 @@ class PressureTapLabeller:
         kwargs = {'aspect':'equal'}
         ax = plt.subplot()
         ax.imshow(cimg2) 
-        ax.invert_xaxis()
+        # ax.invert_xaxis()
         # annotate labelled filtered circle plot
         ptap_coords = [*zip(matched_circles.x, matched_circles.y)]
         for i, coord in enumerate(ptap_coords):
@@ -354,6 +353,7 @@ class PressureTapLabeller:
     def find_ptaps(self, file_path_pattern):
         
         files = find_files(file_path_pattern)
+        labelled_dfs = []
         for file_path in files:
             print(file_path)
             ims = load_cine(file_path)
@@ -363,62 +363,66 @@ class PressureTapLabeller:
             display_img = cv.cvtColor(display_img,cv.COLOR_GRAY2BGR)
             circle_info_df = self._find_circles_and_dists(processed_image)
             matched_circles = self._score_circles(file_path, circle_info_df, verbose=False)
+            matched_circles.to_csv('labelled_dataset.csv')
             self.show_ptap_assignment(display_img, matched_circles)
 
 
 if __name__ == '__main__':
     # no store
-    no_store_pat=r"D:\\Raw_DPSP-Data\\62070-DPSP-Empty-Bay-doors-off-sawtooth-LE-TE-Beta0\\MBH009_62070_M_000_Beta_0_CineF24.cine"
+    no_store_pat=r"F:\\Raw_DPSP-Data\\62070-DPSP-Empty-Bay-doors-off-sawtooth-LE-TE-Beta0\\MBH009_62070_M_000_Beta_0_CineF24.cine"
     # store in
-    store_in_pat=r"D:\Raw_DPSP-Data\62130-DPSP-Store-in-doors-on-sawtooth-LE-TE-Beta0\MBH009_62130_M-000-Beta-0_CineF5.cine"
+    store_in_pat=r"F:\Raw_DPSP-Data\62130-DPSP-Store-in-doors-on-sawtooth-LE-TE-Beta0\MBH009_62130_M-000-Beta-0_CineF5.cine"
     #store out
-    store_out_pat=r"D:\Raw_DPSP-Data\62160-DPSP-Store-out-doors-on-sawtooth-LE-TE-Beta0\MBH009_62160_M-000-Beta_00_CineF22.cine"
+    store_out_pat=r"F:\Raw_DPSP-Data\62160-DPSP-Store-out-doors-on-sawtooth-LE-TE-Beta0\MBH009_62160_M-000-Beta_00_CineF22.cine"
 
     files = {
-        'no_store': no_store_pat, 
+        # 'no_store': no_store_pat, 
         'store_in': store_in_pat, 
-        'store_out': store_out_pat,
+        # 'store_out': store_out_pat,
     }
 
-    # SetUpLabelledDataset().create_labelled_dataset(file_paths=files, labelled_datset_file_path='labelled.csv')
+    # LabelledDataset().create_labelled_dataset(file_paths=files, labelled_datset_file_path='store_in_labels.csv')
+
+    # pd.read_csv('store_in_labels.csv')
 
 
 
 
-    PressureTapLabeller('labelled.csv').find_ptaps('95')
+    ptap_lblr = PressureTapLabeller('store_in_labels.csv').find_ptaps('62150-DPSP-Store-in-doors-on-sawtooth-LE-TE-Beta10')
+    ptap_lblr.find_ptaps('62150-DPSP-Store-in-doors-on-sawtooth-LE-TE-Beta10')
 
-    def get_ptap_luminosity_means(file, matched_circles_df, frame_count=100):
-        """100 frames gives good results. no need to use more."""
-        img_gen, _, _ = read_frames(file, start_frame=0, count=frame_count) # around 6600 frames for r'D:\Raw_DPSP-Data\62040-DPSP-Empty-Bay-doors-off-no-LE-TE-Beta0\MBH009_62040-M000_Beta_0_CineF10.cine'
+    # def get_ptap_luminosity_means(file, matched_circles_df, frame_count=100):
+    #     """100 frames gives good results. no need to use more."""
+    #     img_gen, _, _ = read_frames(file, start_frame=0, count=frame_count) # around 6600 frames for r'D:\Raw_DPSP-Data\62040-DPSP-Empty-Bay-doors-off-no-LE-TE-Beta0\MBH009_62040-M000_Beta_0_CineF10.cine'
 
-        circles_filtered = matched_circles_df.loc[:,['x', 'y', 'r', 'highest_scoring_ptap']].values
+    #     circles_filtered = matched_circles_df.loc[:,['x', 'y', 'r', 'highest_scoring_ptap']].values
 
-        luminosity_df = pd.DataFrame()
-        for i in range(frame_count):
-            img_raw = np.array(next(img_gen), dtype=np.float32)
-            cimg2 = cv.cvtColor(array_norm(img_raw),cv.COLOR_GRAY2BGR) 
-            cimg2*=2.5
-            # Iterate through each ptap -> create surrounding ring -> record luminosity at each ring pixel -> take mean -> add to df 
-            for j, circle in enumerate(circles_filtered):
-                cv.circle(cimg2,(circle[0],circle[1]),circle[2]+7,(0,255,0),4) # ring has inner radius of 7-4/2 and outer of 7+4/2
-                ring_coords = np.argwhere(cimg2[:,:,1]==255)
-                ring_luminosity = img_raw[ring_coords[:,0], ring_coords[:,1]]
+    #     luminosity_df = pd.DataFrame()
+    #     for i in range(frame_count):
+    #         img_raw = np.array(next(img_gen), dtype=np.float32)
+    #         cimg2 = cv.cvtColor(array_norm(img_raw),cv.COLOR_GRAY2BGR) 
+    #         cimg2*=2.5
+    #         # Iterate through each ptap -> create surrounding ring -> record luminosity at each ring pixel -> take mean -> add to df 
+    #         for j, circle in enumerate(circles_filtered):
+    #             cv.circle(cimg2,(circle[0],circle[1]),circle[2]+7,(0,255,0),4) # ring has inner radius of 7-4/2 and outer of 7+4/2
+    #             ring_coords = np.argwhere(cimg2[:,:,1]==255)
+    #             ring_luminosity = img_raw[ring_coords[:,0], ring_coords[:,1]]
                 
-                # Apply a threshold to remove any bad pixels that might be included
-    #             e.g. => ring_luminosity_filtered = ring_luminosity[ring_luminosity>0]
+    #             # Apply a threshold to remove any bad pixels that might be included
+    # #             e.g. => ring_luminosity_filtered = ring_luminosity[ring_luminosity>0]
                 
                 
-                luminosity_df.loc[i, circle[-1]] = ring_luminosity.mean() # mean of each pixel
-                ########## pretty sure this needs to be added so that frame is reset and ring isn't included in the next iteration.
-                ######### show image to for each iter to see what happens.
-    #             cimg2 = cv.cvtColor(array_norm(img_raw),cv.COLOR_GRAY2BGR) 
-    #             cimg2*=2.5
+    #             luminosity_df.loc[i, circle[-1]] = ring_luminosity.mean() # mean of each pixel
+    #             ########## pretty sure this needs to be added so that frame is reset and ring isn't included in the next iteration.
+    #             ######### show image to for each iter to see what happens.
+    # #             cimg2 = cv.cvtColor(array_norm(img_raw),cv.COLOR_GRAY2BGR) 
+    # #             cimg2*=2.5
                 
-            del img_raw ## Not sure why this is here
+    #         del img_raw ## Not sure why this is here
 
 
-        luminosity_mean = luminosity_df.apply(lambda x: x.mean()) # mean of ptap across frames
-        luminosity_mean_df = pd.pivot_table(luminosity_mean.reset_index(), columns='index')
-        luminosity_mean_df['config'] = file
+    #     luminosity_mean = luminosity_df.apply(lambda x: x.mean()) # mean of ptap across frames
+    #     luminosity_mean_df = pd.pivot_table(luminosity_mean.reset_index(), columns='index')
+    #     luminosity_mean_df['config'] = file
         
-        return luminosity_df,luminosity_mean_df
+    #     return luminosity_df,luminosity_mean_df
